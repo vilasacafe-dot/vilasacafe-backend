@@ -12,16 +12,40 @@ const app = express();
 
 app.set('trust proxy', 1);
 app.use(helmet());
+
+// ── CORS ──────────────────────────────────────────────────────────────────
+// Must come BEFORE every other middleware so OPTIONS pre-flight requests
+// get the correct headers. Vercel serverless doesn't persist keep-alive
+// connections, so we also explicitly handle OPTIONS here.
+const allowedOrigins = env.corsOrigins; // from CORS_ORIGINS env var
+
 app.use(
   cors({
     origin(origin, cb) {
-      // Allow same-origin/no-origin (curl, server-to-server) and configured origins.
-      if (!origin || env.corsOrigins.includes(origin)) return cb(null, true);
-      return cb(new Error('Not allowed by CORS'));
+      // Allow server-to-server (no origin), and all configured origins.
+      // In production CORS_ORIGINS must contain the exact frontend URL.
+      if (!origin || allowedOrigins.includes(origin)) return cb(null, true);
+      return cb(new Error(`CORS: origin ${origin} is not allowed`));
     },
+    methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization'],
     credentials: true,
+    optionsSuccessStatus: 200, // some browsers choke on 204
   })
 );
+
+// Explicitly handle pre-flight for every route so Vercel's edge doesn't
+// swallow it before Express sees it.
+app.options('*', cors({
+  origin(origin, cb) {
+    if (!origin || allowedOrigins.includes(origin)) return cb(null, true);
+    return cb(new Error(`CORS: origin ${origin} is not allowed`));
+  },
+  methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization'],
+  credentials: true,
+  optionsSuccessStatus: 200,
+}));
 app.use(express.json({ limit: '1mb' }));
 app.use(morgan(isProd ? 'combined' : 'dev'));
 
