@@ -23,19 +23,39 @@ export const env = {
   nodeEnv: optional('NODE_ENV', 'development'),
   port: parseInt(optional('PORT', '4000'), 10),
 
-  // Comma-separated list of allowed browser origins.
-  // When deployed on Vercel (VERCEL=1 is set automatically), fall back to the
-  // known production frontend origins if CORS_ORIGINS is not explicitly configured
-  // in the Vercel dashboard. Set CORS_ORIGINS in the dashboard to override this.
-  corsOrigins: optional(
-    'CORS_ORIGINS',
-    process.env.VERCEL === '1'
-      ? 'https://vilasacafe.com,https://www.vilasacafe.com'
-      : 'http://localhost:5173'
-  )
-    .split(',')
-    .map((o) => o.trim())
-    .filter(Boolean),
+  // Allowed browser origins for CORS.
+  //
+  // Resolution order:
+  //   1. On Vercel (VERCEL=1) or any NODE_ENV=production deployment:
+  //      the two known production frontend origins are ALWAYS included.
+  //      Any extra origins in the CORS_ORIGINS env var are merged in on top
+  //      (useful for adding a staging domain later).
+  //   2. Local development: uses CORS_ORIGINS if set, otherwise localhost:5173.
+  //
+  // This means the production URLs work even if CORS_ORIGINS is missing from
+  // the Vercel dashboard, set to an old value, or set to localhost.
+  corsOrigins: (() => {
+    const fromEnv = optional('CORS_ORIGINS', '')
+      .split(',')
+      .map((o) => o.trim())
+      .filter(Boolean);
+
+    const onVercel = process.env.VERCEL === '1';
+    const inProd  = process.env.NODE_ENV === 'production';
+
+    if (onVercel || inProd) {
+      // Always allow the VilaSa Cafe production frontend.
+      const productionOrigins = [
+        'https://vilasacafe.com',
+        'https://www.vilasacafe.com',
+      ];
+      // Merge: production URLs first, then any extras from the dashboard.
+      return [...new Set([...productionOrigins, ...fromEnv])];
+    }
+
+    // Local dev: explicit CORS_ORIGINS or fall back to Vite dev server.
+    return fromEnv.length > 0 ? fromEnv : ['http://localhost:5173'];
+  })(),
 
   supabase: {
     url: required('SUPABASE_URL'),
