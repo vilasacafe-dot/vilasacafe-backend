@@ -24,7 +24,15 @@ export const env = {
   port: parseInt(optional('PORT', '4000'), 10),
 
   // Comma-separated list of allowed browser origins.
-  corsOrigins: optional('CORS_ORIGINS', 'http://localhost:5173')
+  // When deployed on Vercel (VERCEL=1 is set automatically), fall back to the
+  // known production frontend origins if CORS_ORIGINS is not explicitly configured
+  // in the Vercel dashboard. Set CORS_ORIGINS in the dashboard to override this.
+  corsOrigins: optional(
+    'CORS_ORIGINS',
+    process.env.VERCEL === '1'
+      ? 'https://vilasacafe.com,https://www.vilasacafe.com'
+      : 'http://localhost:5173'
+  )
     .split(',')
     .map((o) => o.trim())
     .filter(Boolean),

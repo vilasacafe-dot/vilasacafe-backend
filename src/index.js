@@ -58,7 +58,20 @@ app.use('/api', routes);
 app.use(notFoundHandler);
 app.use(errorHandler);
 
-app.listen(env.port, () => {
-  // eslint-disable-next-line no-console
-  console.log(`Vilasa Cafe API listening on http://localhost:${env.port}`);
-});
+// ── Serverless / local export ─────────────────────────────────────────────
+// Vercel sets VERCEL=1 automatically in all deployments.
+// In that environment we must NOT bind a TCP port — the @vercel/node runtime
+// uses the `export default app` below to route incoming requests.
+// Locally (no VERCEL variable) we start the HTTP server as normal.
+if (!process.env.VERCEL) {
+  app.listen(env.port, () => {
+    // eslint-disable-next-line no-console
+    console.log(`Vilasa Cafe API listening on http://localhost:${env.port}`);
+  });
+}
+
+// REQUIRED for @vercel/node ESM support: the runtime needs a default export
+// that is either an Express app or a raw (req, res) handler function.
+// Without this export, @vercel/node has no handler and every request fails
+// before Express (and therefore CORS middleware) ever runs.
+export default app;
