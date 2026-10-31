@@ -1,6 +1,6 @@
 import { z } from 'zod';
 
-export const COLLEGES = ['SRM UNIVERSITY AP', 'VIT AP', 'AMRITA AP'];
+export const COLLEGES = ['SRM UNIVERSITY AP', 'VIT AP', 'AMRITA AP', 'RESTAURANT PICKUP'];
 const phoneRegex = /^[6-9][0-9]{9}$/;
 
 export const profileSchema = z.object({
