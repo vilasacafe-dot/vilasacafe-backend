@@ -2,49 +2,70 @@ import { supabaseAdmin } from '../config/supabase.js';
 import { env } from '../config/env.js';
 import { asyncHandler } from '../utils/asyncHandler.js';
 import { ApiError } from '../utils/ApiError.js';
-import { placeOrderSchema, statusUpdateSchema } from '../validators/schemas.js';
-import { createOrder, updateOrderStatus } from '../services/orderService.js';
+import { placeOrderSchema, phoneOrderSchema, statusUpdateSchema } from '../validators/schemas.js';
+import { createOrder, createPhoneOrder, updateOrderStatus } from '../services/orderService.js';
 
+// source is included so the admin UI can show WEB vs PHONE badges.
 const ORDER_SELECT = `
-  id, order_number, customer_name, phone, college, notes,
+  id, order_number, customer_name, phone, college, notes, source,
   subtotal, discount, total, coupon_code, payment_method, payment_status,
   order_status, created_at, updated_at,
   order_items ( id, product_name, price, quantity, subtotal )
 `;
 
 /**
- * Customer: place a COD order. All money/validation done server-side
- * inside the place_order DB transaction. Idempotency key prevents dupes.
+ * Customer: place a COD web order.
+ * All pricing / validation happens server-side inside the place_order DB transaction.
  */
 export const placeOrder = asyncHandler(async (req, res) => {
   const body = placeOrderSchema.parse(req.body);
-
   const result = await createOrder({
-    customerId: req.user.id,
-    items: body.items,
-    couponCode: body.coupon_code,
-    notes: body.notes,
+    customerId:    req.user.id,
+    items:         body.items,
+    couponCode:    body.coupon_code,
+    notes:         body.notes,
     idempotencyKey: body.idempotency_key,
   });
-
   res.status(result.reused ? 200 : 201).json({ order: result });
 });
 
 /**
- * Customer: list own orders.
+ * Admin: place a phone / counter order and save it to the DB.
+ * Uses place_phone_order() which bypasses profile + restaurant-open checks.
+ */
+export const placePhoneOrder = asyncHandler(async (req, res) => {
+  const body = phoneOrderSchema.parse(req.body);
+  const result = await createPhoneOrder({
+    adminId:       req.user.id,
+    customerName:  body.customer_name,
+    phone:         body.phone,
+    college:       body.college,
+    items:         body.items,
+    notes:         body.notes,
+    idempotencyKey: body.idempotency_key,
+  });
+  res.status(result.reused ? 200 : 201).json({ order: result });
+});
+
+/**
+ * Customer: list own WEB orders only.
+ * Filters source = 'WEB' so phone orders placed by admin never
+ * appear in the customer-facing order history.
  */
 export const myOrders = asyncHandler(async (req, res) => {
   const { data, error } = await supabaseAdmin
     .from('orders')
     .select(ORDER_SELECT)
     .eq('customer_id', req.user.id)
+    .eq('source', 'WEB')
     .order('created_at', { ascending: false });
   if (error) throw new ApiError(500, 'Could not load your orders.');
   res.json({ orders: data });
 });
 
 /**
- * Customer/admin: get one order. Customers may only see their own.
+ * Customer/admin: get one order.
+ * Customers may only see their own; admins see any.
  */
 export const getOrder = asyncHandler(async (req, res) => {
   const isAdmin = req.profile.role === 'admin';
@@ -56,7 +77,7 @@ export const getOrder = asyncHandler(async (req, res) => {
   res.json({ order: data });
 });
 
-/* ------------------------- Admin ------------------------- */
+/* ─────────────────────── Admin ─────────────────────── */
 
 export const listOrders = asyncHandler(async (req, res) => {
   const { status } = req.query;
@@ -80,14 +101,15 @@ export const changeStatus = asyncHandler(async (req, res) => {
 });
 
 /**
- * Admin dashboard summary for "today" (Asia/Kolkata).
+ * Admin dashboard summary for today (Asia/Kolkata timezone).
  */
 export const dashboardSummary = asyncHandler(async (_req, res) => {
-  // Start of today in IST, expressed as a UTC timestamp for the query.
   const now = new Date();
   const istOffsetMs = 5.5 * 60 * 60 * 1000;
   const istNow = new Date(now.getTime() + istOffsetMs);
-  const istMidnight = new Date(Date.UTC(istNow.getUTCFullYear(), istNow.getUTCMonth(), istNow.getUTCDate()));
+  const istMidnight = new Date(
+    Date.UTC(istNow.getUTCFullYear(), istNow.getUTCMonth(), istNow.getUTCDate())
+  );
   const startUtc = new Date(istMidnight.getTime() - istOffsetMs).toISOString();
 
   const { data, error } = await supabaseAdmin
@@ -100,7 +122,10 @@ export const dashboardSummary = asyncHandler(async (_req, res) => {
   const summary = {
     today_orders: data.length,
     today_sales: 0,
-    counts: { PLACED: 0, ACCEPTED: 0, PREPARING: 0, OUT_FOR_DELIVERY: 0, DELIVERED: 0, CANCELLED: 0 },
+    counts: {
+      PLACED: 0, ACCEPTED: 0, PREPARING: 0,
+      OUT_FOR_DELIVERY: 0, DELIVERED: 0, CANCELLED: 0,
+    },
   };
   for (const o of data) {
     summary.counts[o.order_status] = (summary.counts[o.order_status] || 0) + 1;

@@ -64,6 +64,7 @@ admin.delete('/banners/:id', banners.deleteBanner);
 admin.get('/orders', orders.listOrders);
 admin.put('/orders/:id/status', orders.changeStatus);
 admin.get('/dashboard/summary', orders.dashboardSummary);
+admin.post('/phone-orders', orders.placePhoneOrder);
 
 admin.post('/uploads', handleUpload, uploads.uploadImage);
 

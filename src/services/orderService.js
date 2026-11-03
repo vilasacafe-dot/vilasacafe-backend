@@ -3,25 +3,44 @@ import { env } from '../config/env.js';
 import { ApiError } from '../utils/ApiError.js';
 
 /**
- * Create an order atomically via the place_order DB function.
- * All pricing, availability, restaurant-open and coupon checks happen
- * inside the transaction — the frontend is never trusted for money.
- *
- * @returns {{order_id:string, order_number:string, subtotal:number, discount:number, total:number, reused:boolean}}
+ * Create a web order atomically via the place_order DB function.
  */
 export async function createOrder({ customerId, items, couponCode, notes, idempotencyKey }) {
   const { data, error } = await supabaseAdmin.rpc('place_order', {
-    p_customer_id: customerId,
-    p_restaurant_id: env.restaurantId,
-    p_items: items,   // pass array directly; supabase-js serializes to jsonb
-    p_coupon_code: couponCode || null,
-    p_notes: notes || null,
+    p_customer_id:     customerId,
+    p_restaurant_id:   env.restaurantId,
+    p_items:           items,
+    p_coupon_code:     couponCode     || null,
+    p_notes:           notes          || null,
     p_idempotency_key: idempotencyKey || null,
   });
-
   if (error) {
     console.error('place_order RPC error:', error);
     throw new ApiError(400, error.message || 'Could not place order.', error.code);
+  }
+  return data;
+}
+
+/**
+ * Create a phone / counter order via the place_phone_order DB function.
+ * Bypasses profile checks — admin-only.
+ */
+export async function createPhoneOrder({
+  adminId, customerName, phone, college, items, notes, idempotencyKey,
+}) {
+  const { data, error } = await supabaseAdmin.rpc('place_phone_order', {
+    p_admin_id:        adminId,
+    p_restaurant_id:   env.restaurantId,
+    p_items:           items,
+    p_customer_name:   customerName  || null,
+    p_phone:           phone         || null,
+    p_college:         college,
+    p_notes:           notes         || null,
+    p_idempotency_key: idempotencyKey || null,
+  });
+  if (error) {
+    console.error('place_phone_order RPC error:', error);
+    throw new ApiError(400, error.message || 'Could not save phone order.', error.code);
   }
   return data;
 }

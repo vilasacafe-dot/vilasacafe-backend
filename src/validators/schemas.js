@@ -1,6 +1,6 @@
 import { z } from 'zod';
 
-export const COLLEGES = ['SRM UNIVERSITY AP', 'VIT AP', 'AMRITA AP', 'RESTAURANT PICKUP'];
+export const COLLEGES = ['SRM UNIVERSITY AP', 'VIT AP', 'AMRITA AP', 'RESTAURANT PICKUP', 'TAKEAWAY'];
 const phoneRegex = /^[6-9][0-9]{9}$/;
 
 export const profileSchema = z.object({
@@ -24,6 +24,15 @@ export const couponPreviewSchema = z.object({
 export const placeOrderSchema = z.object({
   items: z.array(cartItemSchema).min(1, 'Your cart is empty.'),
   coupon_code: z.string().trim().max(40).optional().nullable(),
+  notes: z.string().trim().max(300).optional().nullable(),
+  idempotency_key: z.string().trim().min(8).max(100),
+});
+
+export const phoneOrderSchema = z.object({
+  customer_name: z.string().trim().max(80).optional().nullable(),
+  phone: z.string().trim().max(15).optional().nullable(),
+  college: z.enum(COLLEGES, { errorMap: () => ({ message: 'Select a valid campus or pickup option.' }) }),
+  items: z.array(cartItemSchema).min(1, 'Add at least one item.'),
   notes: z.string().trim().max(300).optional().nullable(),
   idempotency_key: z.string().trim().min(8).max(100),
 });
