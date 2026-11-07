@@ -12,6 +12,7 @@ import * as coupons from '../controllers/couponController.js';
 import * as banners from '../controllers/bannerController.js';
 import * as orders from '../controllers/orderController.js';
 import * as uploads from '../controllers/uploadController.js';
+import * as rewards from '../controllers/rewardController.js';
 
 const router = Router();
 
@@ -35,6 +36,8 @@ router.post('/orders', requireAuth, orderLimiter, orders.placeOrder);
 router.get('/orders/mine', requireAuth, orders.myOrders);
 router.get('/orders/:id', requireAuth, orders.getOrder);
 
+router.get('/me/rewards', requireAuth, rewards.myRewards);
+
 /* ------------------------- Admin ------------------------- */
 const admin = Router();
 admin.use(requireAuth, requireAdmin);
@@ -55,6 +58,11 @@ admin.get('/coupons', coupons.listCoupons);
 admin.post('/coupons', coupons.createCoupon);
 admin.put('/coupons/:id', coupons.updateCoupon);
 admin.delete('/coupons/:id', coupons.deleteCoupon);
+
+admin.get('/reward-campaigns', rewards.listCampaigns);
+admin.post('/reward-campaigns', rewards.createCampaign);
+admin.put('/reward-campaigns/:id', rewards.updateCampaign);
+admin.delete('/reward-campaigns/:id', rewards.deleteCampaign);
 
 admin.get('/banners', banners.listAllBanners);
 admin.post('/banners', banners.createBanner);

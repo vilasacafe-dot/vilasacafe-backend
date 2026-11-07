@@ -52,6 +52,9 @@ export const listCoupons = asyncHandler(async (_req, res) => {
     .from('coupons')
     .select('*')
     .eq('restaurant_id', env.restaurantId)
+    // Exclude auto-generated per-customer reward coupons — those are managed
+    // under Loyalty Rewards, not the manual coupon manager.
+    .is('assigned_customer_id', null)
     .order('created_at', { ascending: false });
   if (error) throw new ApiError(500, 'Could not load coupons.');
   const coupons = await Promise.all(data.map(attachTargets));

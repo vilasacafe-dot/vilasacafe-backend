@@ -1,6 +1,7 @@
 import { supabaseAdmin } from '../config/supabase.js';
 import { env } from '../config/env.js';
 import { ApiError } from '../utils/ApiError.js';
+import { evaluateForCustomer } from './rewardService.js';
 
 /**
  * Create a web order atomically via the place_order DB function.
@@ -75,7 +76,12 @@ export async function updateOrderStatus(orderId, nextStatus) {
   }
 
   const patch = { order_status: nextStatus };
-  if (nextStatus === 'DELIVERED') patch.payment_status = 'PAID';
+  if (nextStatus === 'DELIVERED') {
+    patch.payment_status = 'PAID';
+    // Precise completion time used by the loyalty/rewards window. DELIVERED is
+    // terminal, so this is stamped exactly once per order.
+    patch.delivered_at = new Date().toISOString();
+  }
 
   const { data: updated, error: updateError } = await supabaseAdmin
     .from('orders')
@@ -85,5 +91,16 @@ export async function updateOrderStatus(orderId, nextStatus) {
     .single();
 
   if (updateError) throw new ApiError(500, 'Could not update order.');
+
+  // Evaluate milestone rewards when a genuine customer (web) order completes.
+  // Best-effort and idempotent — never let it break the status update.
+  if (nextStatus === 'DELIVERED' && updated.source === 'WEB') {
+    try {
+      await evaluateForCustomer(updated.customer_id);
+    } catch (e) {
+      console.error('Reward evaluation failed for order', orderId, e);
+    }
+  }
+
   return updated;
 }

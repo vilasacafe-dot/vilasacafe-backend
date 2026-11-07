@@ -89,6 +89,26 @@ export const couponSchema = z.object({
   { message: 'Select at least one product for this coupon.', path: ['product_ids'] }
 );
 
+export const rewardCampaignSchema = z
+  .object({
+    name: z.string().trim().min(2, 'Enter a campaign name.').max(120),
+    description: z.string().trim().max(400).optional().nullable(),
+    duration_days: z.number().int().positive('Duration must be at least 1 day.').max(365),
+    required_orders: z.number().int().positive('Require at least 1 order.').max(100),
+    discount_type: z.enum(['percentage', 'fixed']),
+    discount_value: z.number().positive(),
+    max_discount: z.number().positive().optional().nullable(),
+    min_order_value: z.number().nonnegative().optional(),
+    coupon_validity_days: z.number().int().positive('Coupon validity must be at least 1 day.').max(365),
+    starts_at: z.string().datetime().optional(),
+    ends_at: z.string().datetime().optional().nullable(),
+    is_active: z.boolean().optional(),
+  })
+  .refine((d) => d.discount_type !== 'percentage' || d.discount_value <= 100, {
+    message: 'Percentage discount cannot exceed 100.',
+    path: ['discount_value'],
+  });
+
 export const bannerSchema = z.object({
   title: z.string().trim().max(120).optional().nullable(),
   image_key: z.string().min(1),
