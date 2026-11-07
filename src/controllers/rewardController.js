@@ -2,7 +2,7 @@ import { supabaseAdmin } from '../config/supabase.js';
 import { env } from '../config/env.js';
 import { asyncHandler } from '../utils/asyncHandler.js';
 import { ApiError } from '../utils/ApiError.js';
-import { rewardCampaignSchema } from '../validators/schemas.js';
+import { rewardCampaignSchema, rewardCampaignUpdateSchema } from '../validators/schemas.js';
 import { getCustomerRewards } from '../services/rewardService.js';
 
 /* ───────────────────────── Customer ───────────────────────── */
@@ -30,10 +30,13 @@ export const listCampaigns = asyncHandler(async (_req, res) => {
 
 export const createCampaign = asyncHandler(async (req, res) => {
   const fields = rewardCampaignSchema.parse(req.body);
+  // Mirror into the legacy required_orders column so the row stays valid
+  // regardless of migration order (the column is otherwise unused now).
+  const row = { ...fields, required_orders: fields.required_streak_days, restaurant_id: env.restaurantId };
 
   const { data, error } = await supabaseAdmin
     .from('reward_campaigns')
-    .insert({ ...fields, restaurant_id: env.restaurantId })
+    .insert(row)
     .select('*')
     .single();
   if (error) throw new ApiError(500, 'Could not create reward campaign.');
@@ -41,7 +44,10 @@ export const createCampaign = asyncHandler(async (req, res) => {
 });
 
 export const updateCampaign = asyncHandler(async (req, res) => {
-  const fields = rewardCampaignSchema.partial().parse(req.body);
+  const fields = rewardCampaignUpdateSchema.parse(req.body);
+  if (fields.required_streak_days !== undefined) {
+    fields.required_orders = fields.required_streak_days; // keep legacy column in sync
+  }
 
   const { data, error } = await supabaseAdmin
     .from('reward_campaigns')

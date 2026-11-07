@@ -89,24 +89,44 @@ export const couponSchema = z.object({
   { message: 'Select at least one product for this coupon.', path: ['product_ids'] }
 );
 
-export const rewardCampaignSchema = z
-  .object({
-    name: z.string().trim().min(2, 'Enter a campaign name.').max(120),
-    description: z.string().trim().max(400).optional().nullable(),
-    duration_days: z.number().int().positive('Duration must be at least 1 day.').max(365),
-    required_orders: z.number().int().positive('Require at least 1 order.').max(100),
-    discount_type: z.enum(['percentage', 'fixed']),
-    discount_value: z.number().positive(),
-    max_discount: z.number().positive().optional().nullable(),
-    min_order_value: z.number().nonnegative().optional(),
-    coupon_validity_days: z.number().int().positive('Coupon validity must be at least 1 day.').max(365),
-    starts_at: z.string().datetime().optional(),
-    ends_at: z.string().datetime().optional().nullable(),
-    is_active: z.boolean().optional(),
-  })
-  .refine((d) => d.discount_type !== 'percentage' || d.discount_value <= 100, {
-    message: 'Percentage discount cannot exceed 100.',
-    path: ['discount_value'],
+const rewardCampaignBase = z.object({
+  name: z.string().trim().min(2, 'Enter a campaign name.').max(120),
+  description: z.string().trim().max(400).optional().nullable(),
+  // Total campaign window (X days) and required distinct streak days (Y days).
+  duration_days: z.number().int().positive('Duration must be at least 1 day.').max(365),
+  required_streak_days: z.number().int().positive('Require at least 1 streak day.').max(365),
+  discount_type: z.enum(['percentage', 'fixed']),
+  discount_value: z.number().positive(),
+  max_discount: z.number().positive().optional().nullable(),
+  min_order_value: z.number().nonnegative().optional(),
+  coupon_validity_days: z.number().int().positive('Coupon validity must be at least 1 day.').max(365),
+  starts_at: z.string().datetime().optional(),
+  ends_at: z.string().datetime().optional().nullable(),
+  is_active: z.boolean().optional(),
+});
+
+// Partial-safe refinements (skip when the relevant fields are absent on update).
+const percentageWithinRange = (d) =>
+  d.discount_type !== 'percentage' || d.discount_value === undefined || d.discount_value <= 100;
+const streakWithinWindow = (d) =>
+  d.required_streak_days === undefined || d.duration_days === undefined || d.required_streak_days <= d.duration_days;
+
+export const rewardCampaignSchema = rewardCampaignBase
+  .refine(percentageWithinRange, { message: 'Percentage discount cannot exceed 100.', path: ['discount_value'] })
+  .refine(streakWithinWindow, {
+    message: 'Required streak days cannot exceed the campaign duration.',
+    path: ['required_streak_days'],
+  });
+
+// Used for edits / toggles: every field optional, but the same cross-field
+// rules apply when both operands are present. (ZodEffects has no .partial(),
+// so the partial is taken from the base object before refining.)
+export const rewardCampaignUpdateSchema = rewardCampaignBase
+  .partial()
+  .refine(percentageWithinRange, { message: 'Percentage discount cannot exceed 100.', path: ['discount_value'] })
+  .refine(streakWithinWindow, {
+    message: 'Required streak days cannot exceed the campaign duration.',
+    path: ['required_streak_days'],
   });
 
 export const bannerSchema = z.object({
